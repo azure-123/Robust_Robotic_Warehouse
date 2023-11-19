@@ -1,12 +1,12 @@
 import torch
 import robotic_warehouse
-import lbforaging
+# import lbforaging
 import gym
 
 from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
 
-path = "pretrained/rware-small-4ag"
+path = "/home/azure/seac/seac/pretrained/rware-small-4ag" #"pretrained/rware-small-4ag"
 env_name = "rware-small-4ag-v1"
 time_limit = 500 # 25 for LBF
 
@@ -30,7 +30,7 @@ for i in range(RUN_STEPS):
     obs = [torch.from_numpy(o) for o in obs]
     _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
     actions = [a.item() for a in actions]
-    env.render()
+    # env.render()
     obs, _, done, info = env.step(actions)
     if all(done):
         obs = env.reset()

@@ -9,7 +9,7 @@ import numpy as np
 
 import gym
 from model import Policy, FCNetwork
-from gym.spaces.utils import flatdim
+from gym.spaces.utils import flatdim, flatdim_box_multibinary, flatdim_discrete
 from storage import RolloutStorage
 from sacred import Ingredient
 
@@ -54,8 +54,8 @@ class A2C:
         device,
     ):
         self.agent_id = agent_id
-        self.obs_size = flatdim(obs_space)
-        self.action_size = flatdim(action_space)
+        self.obs_size = flatdim_box_multibinary(obs_space) #flatdim(obs_space)
+        self.action_size = flatdim_discrete(action_space)
         self.obs_space = obs_space
         self.action_space = action_space
 

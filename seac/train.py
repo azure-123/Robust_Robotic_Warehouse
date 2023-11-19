@@ -25,7 +25,7 @@ from wrappers import RecordEpisodeStatistics, SquashDones
 from model import Policy
 
 import robotic_warehouse # noqa
-import lbforaging # noqa
+# import lbforaging # noqa
 
 ex = Experiment(ingredients=[algorithm])
 ex.captured_out_filter = lambda captured_output: "Output capturing turned off."
@@ -137,9 +137,10 @@ def evaluate(
 
     eval_envs.close()
     info = _squash_info(all_infos)
-    _log.info(
-        f"Evaluation using {len(all_infos)} episodes: mean reward {info['episode_reward']:.5f}\n"
-    )
+    print(info)
+    # _log.info(
+    #     f"Evaluation using {len(all_infos)} episodes: mean reward {info['episode_reward']:.5f}\n"
+    # )
 
 
 @ex.automain
