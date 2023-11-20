@@ -188,7 +188,7 @@ def main(
         algorithm["device"],
     )
 
-    adv = True
+    adv = False
     agents = [
         A2C(i, osp, asp)
         for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
