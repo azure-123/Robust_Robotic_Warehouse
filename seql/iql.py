@@ -9,7 +9,7 @@ from marl_algorithm import MarlAlgorithm
 from marl_utils import soft_update
 from agent import Agent
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else device)
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 MSELoss = torch.nn.MSELoss()
 
