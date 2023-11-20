@@ -14,7 +14,7 @@ def tar_attack(agents, epsilon, states, action, tar_action):
                             for agent in agents]
     for adv_state in adv_states:
         adv_state.retain_grad()
-    losses = [-loss_func(logits[i], tar_action[i].squeeze()) + loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
+    losses = [-loss_func(logits[i], torch.tensor(tar_action[i], dtype=torch.float32)) + loss_func(logits[i], torch.tensor(action[i], dtype=torch.float32)) for i in range(len(agents))]
     for loss in losses:
         loss.backward()
     

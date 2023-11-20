@@ -6,15 +6,17 @@ import numpy as np
 def tar_attack(agents, epsilon, states, action, tar_action):
     loss_func = nn.CrossEntropyLoss()
     adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
-    logits = [agent.model.attack_act(
+    logits = [agent.model.act(
                                 adv_states[agent.agent_id], 
                                 agent.storage.recurrent_hidden_states[agent.agent_id],
                                 agent.storage.masks[agent.agent_id]
                             ) 
                             for agent in agents]
+    for i in range(len(agents)):
+        logits[i] = torch.stack(logits[i])
     for adv_state in adv_states:
         adv_state.retain_grad()
-    losses = [-loss_func(logits[i], tar_action[i].squeeze()) + loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
+    losses = [-loss_func(logits[i][0], tar_action[i].clone().detach().float()) + loss_func(logits[i][0], action[i].clone().detach().float()) for i in range(len(agents))]
     for loss in losses:
         loss.backward()
     
