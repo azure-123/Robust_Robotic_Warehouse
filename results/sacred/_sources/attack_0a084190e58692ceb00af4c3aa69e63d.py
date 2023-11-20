@@ -25,9 +25,8 @@ def tar_attack(agents, epsilon, states, action, tar_action):
         adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
         eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
         adv_states[i].data = states[i].data + eta[i]
-        adv_states[i] = adv_states[i].detach()
 
-    return adv_states
+    return adv_states.detach()
 
 # def tar_attack_eval(model, epsilon, states, action, tar_action, opt, use_cuda):
     # loss_func = nn.CrossEntropyLoss()

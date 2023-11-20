@@ -188,7 +188,7 @@ def main(
         algorithm["device"],
     )
 
-    adv = True
+    adv = False
     agents = [
         A2C(i, osp, asp)
         for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
@@ -258,7 +258,7 @@ def main(
                         ]
                     )
                 # Obser reward and next obs
-                obs, reward, done, infos = envs.step(n_action) # n_action is the perturbed action
+                obs, reward, done, infos = envs.step(n_action)
                 with torch.no_grad():
                     n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
                         *[
@@ -312,7 +312,7 @@ def main(
                         tar_action[i],
                         adv_action_log_prob[i],
                         adv_value[i],
-                        -reward[:, i].unsqueeze(1),
+                        reward[:, i].unsqueeze(1),
                         masks,
                         bad_masks,
                     )
