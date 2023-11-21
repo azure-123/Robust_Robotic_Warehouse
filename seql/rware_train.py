@@ -85,6 +85,21 @@ class RWARETrain(Train):
 
         return actions, onehot_actions
 
+    def select_tar_actions(self, obs, explore=True):
+        """
+        Select actions for agents
+        :param obs: joint observations for agents
+        :return: actions, onehot_actions
+        """
+        # get actions as torch Variables
+        torch_agent_actions = self.adv_alg.step(obs, explore)
+        # convert actions to numpy arrays
+        onehot_actions = [ac.data.numpy() for ac in torch_agent_actions]
+        # convert onehot to ints
+        actions = np.argmax(onehot_actions, axis=-1)
+
+        return actions, onehot_actions
+
     def environment_step(self, actions):
         """
         Take step in the environment

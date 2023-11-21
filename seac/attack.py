@@ -3,7 +3,7 @@ from torch import nn
 from torch.autograd import Variable
 import numpy as np
 
-def tar_attack(agents, epsilon, states, action, tar_action):
+def tar_attack(agents, epsilon, states, action, tar_action, opt):
     loss_func = nn.CrossEntropyLoss()
     adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
     logits = [agent.model.attack_act(
@@ -14,6 +14,7 @@ def tar_attack(agents, epsilon, states, action, tar_action):
                             for agent in agents]
     for adv_state in adv_states:
         adv_state.retain_grad()
+    opt.zero_grad()
     losses = [-loss_func(logits[i], tar_action[i].squeeze()) + loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
     for loss in losses:
         loss.backward()

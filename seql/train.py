@@ -14,6 +14,9 @@ from baseline_buffer import MARLReplayBuffer
 from utilities.model_saver import ModelSaver
 from utilities.logger import Logger
 
+# attack import
+from attack import tar_attack
+
 USE_CUDA = False #torch.cuda.is_available()
 TARGET_TYPES = ["simple", "double", "our-double", "our-clipped"]
 
@@ -99,6 +102,11 @@ class Train:
         )
         self.parser.add_argument("--save_interval", default=100, type=int)
         self.parser.add_argument("--training_returns_freq", default=100, type=int)
+        
+        # attack config
+        self.parser.add_argument(
+            "--attack_epsilon", type=float, default=0.1, help="attack epsilon ball"
+        )
 
     def parse_args(self):
         """
@@ -143,6 +151,15 @@ class Train:
         raise NotImplementedError
 
     def select_actions(self, obs, explore=True):
+        """
+        Select actions for agents
+        :param obs: joint observation
+        :param explore: flag if exploration should be used
+        :return: action_tensor, action_list
+        """
+        raise NotImplementedError()
+    
+    def select_tar_actions(self, obs, explore=True):
         """
         Select actions for agents
         :param obs: joint observation
@@ -290,6 +307,9 @@ class Train:
         self.alg = IQL(
             n_agents, observation_sizes, action_sizes, self.arglist
         )
+        self.adv_alg = IQL(
+            n_agents, observation_sizes, action_sizes, self.arglist
+        )
 
         obs_size = observation_sizes[0]
         for o_size in observation_sizes[1:]:
@@ -302,6 +322,10 @@ class Train:
             self.arglist.buffer_capacity,
             n_agents,
         )
+        self.adv_memory = MARLReplayBuffer(
+            self.arglist.buffer_capacity,
+            n_agents,
+        ) # adversary's memory
 
         # set random seeds past model creation
         self.set_seeds(self.arglist.seed)
@@ -341,9 +365,15 @@ class Train:
                     Variable(torch.Tensor(obs[i]), requires_grad=False) for i in range(n_agents)
                 ]
 
+                # actions used for the attack
+                actions, onehot_actions = self.select_actions(torch_obs)
+                # actions from the adversary
+                tar_actions, tar_onehot_actions = self.select_tar_actions(torch_obs)
+                adv_obs = tar_attack(self.alg, self.arglist.attack_epsilon, torch_obs, actions, tar_actions, self.adv_alg.agents[0].optimizer)
+
                 # env_time += time.process_time() - timer
                 # timer = time.process_time()
-                actions, onehot_actions = self.select_actions(torch_obs)
+                actions, onehot_actions = self.select_actions(adv_obs)
                 # step_time += time.process_time() - timer
                 # timer = time.process_time()
                 rewards, dones, next_obs, info = self.environment_step(actions)
@@ -361,6 +391,7 @@ class Train:
                     and (t % self.arglist.steps_per_update) == 0
                 ):
                     losses = self.alg.update(self.memory, USE_CUDA)
+                    adv_losses = self.adv_alg.update(self.adv_memory, USE_CUDA)
                     self.logger.log_losses(ep, losses)
                     #self.logger.dump_losses(1)
 
@@ -470,6 +501,6 @@ class Train:
 
         env.close()
 
-    if __name__ == "__main__":
-        train = Train()
-        train.train()
+    # if __name__ == "__main__":
+    #     train = Train()
+    #     train.train()

@@ -188,7 +188,7 @@ def main(
         algorithm["device"],
     )
 
-    adv = False
+    adv = True
     agents = [
         A2C(i, osp, asp)
         for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
@@ -226,7 +226,7 @@ def main(
                             ]
                         )
         
-        adv_obs = tar_attack(agents, 0.1, obs, n_action, tar_action)
+        adv_obs = tar_attack(agents, 0.1, obs, n_action, tar_action, adv_agents[0].optimizer)
 
         
         for i in range(len(obs)):
@@ -280,7 +280,7 @@ def main(
                                 for agent in adv_agents
                             ]
                         )
-                adv_obs = tar_attack(agents, 0.1, obs, n_action, tar_action)
+                adv_obs = tar_attack(agents, 0.1, obs, n_action, tar_action, adv_agents[0].optimizer)
 
                 # envs.envs[0].render()
 
