@@ -57,8 +57,8 @@ def config():
     save_dir = "./results/trained_models/{id}"
 
     log_interval = 2000
-    save_interval = int(1e6)
-    eval_interval = int(1e6)
+    save_interval = 100 #int(1e6)
+    eval_interval = 100 #int(1e6)
     episodes_per_eval = 8
 
 
