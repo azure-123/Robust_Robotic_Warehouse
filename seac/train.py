@@ -50,15 +50,15 @@ def config():
     )
     dummy_vecenv = False
 
-    num_env_steps = 100e6
+    num_env_steps = 40000000
 
     eval_dir = "./results/video/{id}"
     loss_dir = "./results/loss/{id}"
     save_dir = "./results/trained_models/{id}"
 
     log_interval = 2000
-    save_interval = 100 #int(1e6)
-    eval_interval = 100 #int(1e6)
+    save_interval = int(1e6)
+    eval_interval = int(1e6)
     episodes_per_eval = 8
 
 
@@ -100,8 +100,17 @@ def evaluate(
         time_limit,
         wrappers,
         device,
-        monitor_dir=monitor_dir,
+        # monitor_dir=monitor_dir,
     )
+    # envs = make_vec_envs(
+    #     env_name,
+    #     seed,
+    #     dummy_vecenv,
+    #     algorithm["num_processes"],
+    #     time_limit,
+    #     wrappers,
+    #     algorithm["device"],
+    # )
 
     n_obs = eval_envs.reset()
     n_recurrent_hidden_states = [
@@ -188,7 +197,7 @@ def main(
         algorithm["device"],
     )
 
-    adv = True
+    adv = False
     agents = [
         A2C(i, osp, asp)
         for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
