@@ -521,10 +521,6 @@ def main(
                     save_at = path.join(cur_save_dir, f"agent{agent.agent_id}")
                     os.makedirs(save_at, exist_ok=True)
                     agent.save(save_at)
-                for adv_agent in agents:
-                    save_at = path.join(cur_save_dir, f"adv_agent{agent.agent_id}")
-                    os.makedirs(save_at, exist_ok=True)
-                    agent.save(save_at)
                 archive_name = shutil.make_archive(cur_save_dir, "xztar", save_dir, f"u{j}")
                 shutil.rmtree(cur_save_dir)
                 _run.add_artifact(archive_name)
