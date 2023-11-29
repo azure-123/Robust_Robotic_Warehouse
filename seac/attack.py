@@ -72,13 +72,6 @@ def fgsm(agents, epsilon, states, action, opt):
     losses = [loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
     for loss in losses:
         loss.backward()
-    # print( X_adv.grad)
-    # eta_0 = epsilon * X_adv.grad.data.sign()
-    # X_adv.data = Variable(X_adv.data + eta_0, requires_grad=True)
-
-    # eta_0 = torch.clamp(X_adv.data- agent_inputs.data, -epsilon, epsilon)
-    # X_adv.data = agent_inputs.data + eta_0
-    # print(X_adv - X)
     eta = [epsilon * adv_states[i].grad.data.sign() for i in range(len(agents))]
     for i in range(len(adv_states)):
         adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
@@ -90,6 +83,17 @@ def fgsm(agents, epsilon, states, action, opt):
 def rand_noise(epsilon, states):
     adv_states = [Variable(adv_state) for adv_state in states]
     eta = [2 * epsilon * torch.rand(adv_state.size()) - epsilon for adv_state in adv_states]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+        eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + eta[i]
+        adv_states[i] = adv_states[i].detach()
+    # print(X_adv - agent_inputs)
+    return adv_states
+
+def gaussian_noise(epsilon, states):
+    adv_states = [Variable(adv_state) for adv_state in states]
+    eta = [2 * epsilon * torch.randn(adv_state.size()) - epsilon for adv_state in adv_states]
     for i in range(len(adv_states)):
         adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
         eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)

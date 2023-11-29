@@ -7,7 +7,7 @@ from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
 
 # import attack functions
-from attack import fgsm, rand_noise
+from attack import fgsm, rand_noise, gaussian_noise
 
 path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
 env_name = "rware-tiny-4ag-v1"
@@ -63,6 +63,20 @@ elif adv == "rand_noise":
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         adv_obs = rand_noise(epsilon, obs)
+        _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
+        actions = [a.item() for a in actions]
+        # env.render()
+        obs, _, done, info = env.step(actions)
+        if all(done):
+            obs = env.reset()
+            print("--- Episode Finished ---")
+            print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(info)
+            print(" --- ")
+elif adv == "gaussian_noise":
+    for i in range(RUN_STEPS):
+        obs = [torch.from_numpy(o) for o in obs]
+        adv_obs = gaussian_noise(epsilon, obs)
         _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
         actions = [a.item() for a in actions]
         # env.render()
