@@ -13,7 +13,7 @@ path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_mo
 env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
 adv = "pgd" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
-epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm
+epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
 niters = 10 # for pgd
 
 RUN_STEPS = 1500
