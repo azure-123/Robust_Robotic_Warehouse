@@ -80,6 +80,41 @@ def fgsm(agents, epsilon, states, action, opt):
         adv_states[i] = adv_states[i].detach()
     return adv_states
 
+def pgd(agents, epsilon, states, action, opt, niters):
+    loss_func = nn.CrossEntropyLoss()
+    adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
+
+    noise = [2 * epsilon * torch.rand(adv_state.size()) - epsilon for adv_state in adv_states]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + noise[i], requires_grad=True)
+        noise[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + noise[i]
+        adv_states[i] = Variable(adv_states[i], requires_grad=True)
+
+    # iterate
+    step_size = epsilon / niters
+    for _ in range(niters):
+        logits = [agent.model.attack_act(
+                                adv_states[agent.agent_id], 
+                                agent.storage.recurrent_hidden_states,
+                                agent.storage.masks
+                            ) 
+                            for agent in agents]
+        opt.zero_grad()
+        losses = [loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
+        for adv_state in adv_states:
+            adv_state.retain_grad()
+        for loss in losses:
+            loss.backward()
+        eta = [step_size * adv_states[i].grad.data.sign() for i in range(len(agents))]
+        for i in range(len(adv_states)):
+            adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+            eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+            adv_states[i].data = states[i].data + eta[i]
+    for i in range(len(adv_states)):
+        adv_states[i] = adv_states[i].detach()
+    return adv_states
+
 def rand_noise(epsilon, states):
     adv_states = [Variable(adv_state) for adv_state in states]
     eta = [2 * epsilon * torch.rand(adv_state.size()) - epsilon for adv_state in adv_states]

@@ -7,15 +7,16 @@ from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
 
 # import attack functions
-from attack import fgsm, rand_noise, gaussian_noise
+from attack import fgsm, rand_noise, gaussian_noise, pgd
 
 path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
 env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
-adv = None # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
+adv = "pgd" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
 epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm
+niters = 10 # for pgd
 
-RUN_STEPS = 15000
+RUN_STEPS = 1500
 
 env = gym.make(env_name)
 env = TimeLimit(env, time_limit)
@@ -59,6 +60,21 @@ elif adv == "fgsm":
             print(f"Episode rewards: {sum(info['episode_reward'])}")
             print(info)
             print(" --- ")
+elif adv == "pgd":
+    for i in range(RUN_STEPS):
+        obs = [torch.from_numpy(o) for o in obs]
+        _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
+        adv_obs = pgd(agents, epsilon, obs, actions, agents[0].optimizer, niters)
+        _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
+        actions = [a.item() for a in actions]
+        # env.render()
+        obs, _, done, info = env.step(actions)
+        if all(done):
+            obs = env.reset()
+            print("--- Episode Finished ---")
+            print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(info)
+            print(" --- ")
 elif adv == "rand_noise":
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
@@ -87,3 +103,5 @@ elif adv == "gaussian_noise":
             print(f"Episode rewards: {sum(info['episode_reward'])}")
             print(info)
             print(" --- ")
+else:
+    print("Error: please specify a type of attack!")
