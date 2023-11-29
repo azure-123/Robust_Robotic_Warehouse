@@ -8,8 +8,8 @@ def tar_attack(agents, epsilon, states, action, tar_action, opt):
     adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
     logits = [agent.model.attack_act(
                                 adv_states[agent.agent_id], 
-                                agent.storage.recurrent_hidden_states[agent.agent_id],
-                                agent.storage.masks[agent.agent_id]
+                                agent.storage.recurrent_hidden_states,
+                                agent.storage.masks
                             ) 
                             for agent in agents]
     for adv_state in adv_states:
