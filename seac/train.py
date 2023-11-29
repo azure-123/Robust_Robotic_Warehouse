@@ -50,7 +50,7 @@ def config():
     )
     dummy_vecenv = False
 
-    num_env_steps = 40000000
+    num_env_steps = 80000000
 
     eval_dir = "./results/video/{id}"
     loss_dir = "./results/loss/{id}"

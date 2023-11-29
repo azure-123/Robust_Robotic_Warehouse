@@ -6,9 +6,14 @@ import gym
 from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
 
-path = "/home/azure/seac/seac/pretrained/rware-small-4ag" #"pretrained/rware-small-4ag"
-env_name = "rware-small-4ag-v1"
+# import attack functions
+from attack import fgsm
+
+path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
+env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
+adv = "fgsm" # "fgsm", "pgd", "rand_noise", "gaussian_noise"
+epsilon = 0.02 # <=0.02 is the appropriate perturbation size
 
 RUN_STEPS = 1500
 
@@ -26,17 +31,32 @@ for agent in agents:
 
 obs = env.reset()
 
-for i in range(RUN_STEPS):
-    obs = [torch.from_numpy(o) for o in obs]
-    _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
-    actions = [a.item() for a in actions]
-    # env.render()
-    obs, _, done, info = env.step(actions)
-    if all(done):
-        obs = env.reset()
-        print("--- Episode Finished ---")
-        print(f"Episode rewards: {sum(info['episode_reward'])}")
-        print(info)
-        print(" --- ")
-
+if not adv:
+    for i in range(RUN_STEPS):
+        obs = [torch.from_numpy(o) for o in obs]
+        _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
+        actions = [a.item() for a in actions]
+        # env.render()
+        obs, _, done, info = env.step(actions)
+        if all(done):
+            obs = env.reset()
+            print("--- Episode Finished ---")
+            print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(info)
+            print(" --- ")
+elif adv == "fgsm":
+    for i in range(RUN_STEPS):
+        obs = [torch.from_numpy(o) for o in obs]
+        _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
+        adv_obs = fgsm(agents, epsilon, obs, actions, agents[0].optimizer)
+        _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
+        actions = [a.item() for a in actions]
+        # env.render()
+        obs, _, done, info = env.step(actions)
+        if all(done):
+            obs = env.reset()
+            print("--- Episode Finished ---")
+            print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(info)
+            print(" --- ")
 

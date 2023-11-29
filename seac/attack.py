@@ -56,3 +56,33 @@ def tar_attack(agents, epsilon, states, action, tar_action, opt):
     #     adv_states.data = torch.tensor(np.array(states)).data + eta_0
 
     # return adv_states.cpu().data.numpy()
+
+def fgsm(agents, epsilon, states, action, opt):
+    loss_func = nn.CrossEntropyLoss()
+    adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
+    logits = [agent.model.attack_act(
+                                adv_states[agent.agent_id], 
+                                agent.storage.recurrent_hidden_states,
+                                agent.storage.masks
+                            ) 
+                            for agent in agents]
+    for adv_state in adv_states:
+        adv_state.retain_grad()
+    opt.zero_grad()
+    losses = [loss_func(logits[i], action[i].squeeze()) for i in range(len(agents))]
+    for loss in losses:
+        loss.backward()
+    # print( X_adv.grad)
+    # eta_0 = epsilon * X_adv.grad.data.sign()
+    # X_adv.data = Variable(X_adv.data + eta_0, requires_grad=True)
+
+    # eta_0 = torch.clamp(X_adv.data- agent_inputs.data, -epsilon, epsilon)
+    # X_adv.data = agent_inputs.data + eta_0
+    # print(X_adv - X)
+    eta = [epsilon * adv_states[i].grad.data.sign() for i in range(len(agents))]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+        eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + eta[i]
+        adv_states[i] = adv_states[i].detach()
+    return adv_states
