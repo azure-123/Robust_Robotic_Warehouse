@@ -27,7 +27,8 @@ from model import Policy
 import robotic_warehouse # noqa
 # import lbforaging # noqa
 # attack
-from attack import tar_attack, fgsm, pgd, rand_noise, gaussian_noise
+from attack import tar_attack, fgsm, pgd, rand_noise, gaussian_noise, atla
+from mappo_attack.mappo import MAPPO
 
 ex = Experiment(ingredients=[algorithm])
 ex.captured_out_filter = lambda captured_output: "Output capturing turned off."
@@ -62,7 +63,7 @@ def config():
     episodes_per_eval = 8
 
     # attack config
-    adv = "fgsm"
+    adv = "fgsm" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
     epsilon_ball = 0.02
 
 for conf in glob.glob("configs/*.yaml"):
@@ -213,7 +214,8 @@ def main(
             A2C(i, osp, asp)
             for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
         ]
-
+    elif adv == "atla":
+        adv_agents = MAPPO(envs, envs.observation_space, envs.action_space)
 
     obs = envs.reset()
 
@@ -388,6 +390,177 @@ def main(
                     save_at = path.join(cur_save_dir, f"adv_agent{agent.agent_id}")
                     os.makedirs(save_at, exist_ok=True)
                     agent.save(save_at)
+                archive_name = shutil.make_archive(cur_save_dir, "xztar", save_dir, f"u{j}")
+                shutil.rmtree(cur_save_dir)
+                _run.add_artifact(archive_name)
+
+            if eval_interval is not None and (
+                j > 0 and j % eval_interval == 0 or j == num_updates
+            ):
+                evaluate(
+                    agents, os.path.join(eval_dir, f"u{j}"),
+                )
+                videos = glob.glob(os.path.join(eval_dir, f"u{j}") + "/*.mp4")
+                for i, v in enumerate(videos):
+                    _run.add_artifact(v, f"u{j}.{i}.mp4")
+    if adv == "atla":
+    # calculate the actions before purturbing
+        with torch.no_grad():
+            n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
+                            *[
+                                agent.model.act(
+                                    obs[agent.agent_id],
+                                    agent.storage.recurrent_hidden_states[0],
+                                    agent.storage.masks[0],
+                                )
+                                for agent in agents
+                            ]
+                        )
+            adv_value, tar_action, adv_action_log_prob, adv_recurrent_hidden_states = zip(
+                            *[
+                                agent.model.act(
+                                    obs[agent.agent_id],
+                                    agent.storage.recurrent_hidden_states[0],
+                                    agent.storage.masks[0],
+                                )
+                                for agent in adv_agents
+                            ]
+                        )
+        
+        adv_obs = atla(adv_agents, epsilon_ball, obs)
+
+        
+        for i in range(len(obs)):
+            agents[i].storage.obs[0].copy_(adv_obs[i])
+            agents[i].storage.to(algorithm["device"])
+            adv_agents[i].storage.obs[0].copy_(obs[i])
+            adv_agents[i].storage.to(algorithm["device"])
+
+        start = time.time()
+        num_updates = (
+            int(num_env_steps) // algorithm["num_steps"] // algorithm["num_processes"]
+        )
+
+        all_infos = deque(maxlen=10)
+
+        for j in range(1, num_updates + 1):
+
+            for step in range(algorithm["num_steps"]):
+                # Sample actions
+                with torch.no_grad():
+                    n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
+                        *[
+                            agent.model.act(
+                                agent.storage.obs[step],
+                                agent.storage.recurrent_hidden_states[step],
+                                agent.storage.masks[step],
+                            )
+                            for agent in agents
+                        ]
+                    )
+                # Obser reward and next obs
+                obs, reward, done, infos = envs.step(n_action) # n_action is the perturbed action
+                with torch.no_grad():
+                    n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
+                        *[
+                            agent.model.act(
+                                obs[agent.agent_id],
+                                agent.storage.recurrent_hidden_states[step],
+                                agent.storage.masks[step],
+                            )
+                            for agent in agents
+                        ]
+                    )
+                    adv_value, tar_action, adv_action_log_prob, adv_recurrent_hidden_states = zip(
+                            *[
+                                agent.model.act(
+                                    obs[agent.agent_id],
+                                    agent.storage.recurrent_hidden_states[0],
+                                    agent.storage.masks[0],
+                                )
+                                for agent in adv_agents
+                            ]
+                        )
+                adv_obs = tar_attack(agents, epsilon_ball, obs, n_action, tar_action, adv_agents[0].optimizer)
+
+                # envs.envs[0].render()
+
+                # If done then clean the history of observations.
+                masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
+
+                bad_masks = torch.FloatTensor(
+                    [
+                        [0.0] if info.get("TimeLimit.truncated", False) else [1.0]
+                        for info in infos
+                    ]
+                )
+                for i in range(len(agents)):
+                    agents[i].storage.insert(
+                        adv_obs[i],
+                        n_recurrent_hidden_states[i],
+                        n_action[i],
+                        n_action_log_prob[i],
+                        n_value[i],
+                        reward[:, i].unsqueeze(1),
+                        masks,
+                        bad_masks,
+                    )
+
+                # save the pertubation, i.e. the actions from 
+                adv_agents.memory.push(obs, adv_obs, -reward)
+
+                for info in infos:
+                    if info:
+                        all_infos.append(info)
+
+            # value_loss, action_loss, dist_entropy = agent.update(rollouts)
+            for agent in agents:
+                agent.compute_returns()
+
+            for agent in agents:
+                loss = agent.update([a.storage for a in agents])
+                for k, v in loss.items():
+                    if writer:
+                        writer.add_scalar(f"agent{agent.agent_id}/{k}", v, j)
+            adv_agents.train()
+            for agent in agents:
+                agent.storage.after_update()
+            # for adv_agent in adv_agents:
+            #     adv_agent.storage.after_update()
+
+            if j % log_interval == 0 and len(all_infos) > 1:
+                squashed = _squash_info(all_infos)
+
+                total_num_steps = (
+                    (j + 1) * algorithm["num_processes"] * algorithm["num_steps"]
+                )
+                end = time.time()
+                _log.info(
+                    f"Updates {j}, num timesteps {total_num_steps}, FPS {int(total_num_steps / (end - start))}"
+                )
+                _log.info(
+                    f"Last {len(all_infos)} training episodes mean reward {squashed['episode_reward'].sum():.3f}"
+                )
+
+                for k, v in squashed.items():
+                    _run.log_scalar(k, v, j)
+                all_infos.clear()
+
+            if save_interval is not None and (
+                j > 0 and j % save_interval == 0 or j == num_updates
+            ):
+                cur_save_dir = path.join(save_dir, f"u{j}")
+                for agent in agents:
+                    save_at = path.join(cur_save_dir, f"agent{agent.agent_id}")
+                    os.makedirs(save_at, exist_ok=True)
+                    agent.save(save_at)
+                # for adv_agent in agents:
+                #     save_at = path.join(cur_save_dir, f"adv_agent{agent.agent_id}")
+                #     os.makedirs(save_at, exist_ok=True)
+                #     agent.save(save_at)
+                save_at = save_at = path.join(cur_save_dir, f"adv_agents")
+                os.makedirs(save_at, exist_ok=True)
+                adv_agents.save(save_at)
                 archive_name = shutil.make_archive(cur_save_dir, "xztar", save_dir, f"u{j}")
                 shutil.rmtree(cur_save_dir)
                 _run.add_artifact(archive_name)
