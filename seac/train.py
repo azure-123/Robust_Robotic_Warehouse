@@ -63,7 +63,7 @@ def config():
     episodes_per_eval = 8
 
     # attack config
-    adv = "fgsm" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+    adv = None #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
     epsilon_ball = 0.02
 
 for conf in glob.glob("configs/*.yaml"):
@@ -215,7 +215,7 @@ def main(
             for i, (osp, asp) in enumerate(zip(envs.observation_space, envs.action_space))
         ]
     elif adv == "atla":
-        adv_agents = MAPPO(envs, envs.observation_space, envs.action_space)
+        adv_agents = MAPPO(envs, envs.observation_space, envs.observation_space)
 
     obs = envs.reset()
 
@@ -416,25 +416,16 @@ def main(
                                 for agent in agents
                             ]
                         )
-            adv_value, tar_action, adv_action_log_prob, adv_recurrent_hidden_states = zip(
-                            *[
-                                agent.model.act(
-                                    obs[agent.agent_id],
-                                    agent.storage.recurrent_hidden_states[0],
-                                    agent.storage.masks[0],
-                                )
-                                for agent in adv_agents
-                            ]
-                        )
-        
         adv_obs = atla(adv_agents, epsilon_ball, obs)
-
         
         for i in range(len(obs)):
             agents[i].storage.obs[0].copy_(adv_obs[i])
             agents[i].storage.to(algorithm["device"])
-            adv_agents[i].storage.obs[0].copy_(obs[i])
-            adv_agents[i].storage.to(algorithm["device"])
+            adv_agents.storage[i].obs[0].copy_(obs[i])
+            adv_agents.storage[i].to(algorithm["device"])
+            # adv_agents[i].storage.obs[0].copy_(obs[i])
+            # adv_agents[i].storage.to(algorithm["device"])
+        
 
         start = time.time()
         num_updates = (
@@ -471,17 +462,7 @@ def main(
                             for agent in agents
                         ]
                     )
-                    adv_value, tar_action, adv_action_log_prob, adv_recurrent_hidden_states = zip(
-                            *[
-                                agent.model.act(
-                                    obs[agent.agent_id],
-                                    agent.storage.recurrent_hidden_states[0],
-                                    agent.storage.masks[0],
-                                )
-                                for agent in adv_agents
-                            ]
-                        )
-                adv_obs = tar_attack(agents, epsilon_ball, obs, n_action, tar_action, adv_agents[0].optimizer)
+                adv_obs = atla(adv_agents, epsilon_ball, obs)
 
                 # envs.envs[0].render()
 
@@ -505,9 +486,20 @@ def main(
                         masks,
                         bad_masks,
                     )
+                    adv_agents.storage[i].insert(
+                        obs[i],
+                        # n_recurrent_hidden_states[i],
+                        adv_obs[i],
+                        # n_action_log_prob[i],
+                        # n_value[i],
+                        -reward[:, i].unsqueeze(1),
+                        masks,
+                        bad_masks,
 
-                # save the pertubation, i.e. the actions from 
-                adv_agents.memory.push(obs, adv_obs, -reward)
+                    )
+
+                # save the pertubation, i.e. the actions from the adversary
+                # adv_agents.memory.push(obs, adv_obs, -reward) # push as lists
 
                 for info in infos:
                     if info:
@@ -525,8 +517,8 @@ def main(
             adv_agents.train()
             for agent in agents:
                 agent.storage.after_update()
-            # for adv_agent in adv_agents:
-            #     adv_agent.storage.after_update()
+            for i in range(len(agents)):
+                adv_agents.storage[i].after_update()
 
             if j % log_interval == 0 and len(all_infos) > 1:
                 squashed = _squash_info(all_infos)
@@ -554,11 +546,7 @@ def main(
                     save_at = path.join(cur_save_dir, f"agent{agent.agent_id}")
                     os.makedirs(save_at, exist_ok=True)
                     agent.save(save_at)
-                # for adv_agent in agents:
-                #     save_at = path.join(cur_save_dir, f"adv_agent{agent.agent_id}")
-                #     os.makedirs(save_at, exist_ok=True)
-                #     agent.save(save_at)
-                save_at = save_at = path.join(cur_save_dir, f"adv_agents")
+                save_at = path.join(cur_save_dir, f"adv_agents")
                 os.makedirs(save_at, exist_ok=True)
                 adv_agents.save(save_at)
                 archive_name = shutil.make_archive(cur_save_dir, "xztar", save_dir, f"u{j}")
