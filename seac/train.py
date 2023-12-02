@@ -59,7 +59,7 @@ def config():
 
     log_interval = 2000
     save_interval = int(1e6)
-    eval_interval = int(1e6)
+    eval_interval = 800000000 # int(1e6)
     episodes_per_eval = 8
 
     # attack config
