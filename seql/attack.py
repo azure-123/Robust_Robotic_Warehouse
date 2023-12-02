@@ -110,4 +110,22 @@ def pgd(model, epsilon, states, action, opt, niters):
         adv_states[i] = adv_states[i].detach()
     return adv_states
 
+def rand_noise(epsilon, states):
+    adv_states = [Variable(adv_state) for adv_state in states]
+    eta = [2 * epsilon * torch.rand(adv_state.size()) - epsilon for adv_state in adv_states]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+        eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + eta[i]
+        adv_states[i] = adv_states[i].detach()
+    return adv_states
+
+def gaussian_noise(epsilon, states):
+    adv_states = [Variable(adv_state) for adv_state in states]
+    eta = [2 * epsilon * torch.randn(adv_state.size()) - epsilon for adv_state in adv_states]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+        eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + eta[i]
+        adv_states[i] = adv_states[i].detach()
     return adv_states
