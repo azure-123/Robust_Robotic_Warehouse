@@ -268,7 +268,7 @@ class Train:
         self.action_sizes = action_sizes
 
         # attack config
-        adv = "fgsm" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+        adv = "pgd" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
 
         if self.arglist.max_episode_len == 25:
             steps = self.arglist.num_episodes * 20 #self.arglist.max_episode_len
@@ -386,7 +386,7 @@ class Train:
                     # episode_returns += rewards
 
                     self.memory.add(adv_obs, onehot_actions, rewards, next_obs, dones)
-                    self.adv_memory.add(obs, tar_onehot_actions, -rewards, next_obs, dones)
+                    self.adv_memory.add(obs, tar_onehot_actions, [-reward for reward in rewards], next_obs, dones)
 
                     t += 1
 
@@ -508,6 +508,189 @@ class Train:
                 action_sizes,
                 self.arglist,
             )
+        elif adv == "pgd":
+            # create algorithm trainer
+            self.alg = IQL(
+                n_agents, observation_sizes, action_sizes, self.arglist
+            )
+
+            obs_size = observation_sizes[0]
+            for o_size in observation_sizes[1:]:
+                assert obs_size == o_size
+            act_size = action_sizes[0]
+            for a_size in action_sizes[1:]:
+                assert act_size == a_size
+
+            self.memory = MARLReplayBuffer(
+                self.arglist.buffer_capacity,
+                n_agents,
+            )
+
+            # set random seeds past model creation
+            self.set_seeds(self.arglist.seed)
+
+            self.model_saver = ModelSaver("models", self.arglist.run)
+            self.logger = Logger(
+                n_agents,
+                task_name,
+                self.arglist.run,
+            )
+
+            self.fill_buffer(5000)
+
+            print("Starting iterations...")
+            start_time = time.process_time()
+            # timer = time.process_time()
+            # env_time = 0
+            # step_time = 0
+            # update_time = 0
+            # after_ep_time = 0
+
+            t = 0
+            training_returns_saved = 0
+
+            episode_returns = []
+            episode_agent_returns = []
+            for ep in range(self.arglist.num_episodes):
+                obs = self.reset_environment()
+                self.alg.reset(ep)
+
+                # episode_returns = np.array([0.0] * n_agents)
+                episode_length = 0
+                done = False
+
+                while not done and episode_length < self.arglist.max_episode_len:
+                    torch_obs = [
+                        Variable(torch.Tensor(obs[i]), requires_grad=False) for i in range(n_agents)
+                    ]
+                    actions, onehot_actions = self.select_actions(torch_obs)
+                    adv_obs = fgsm(self.alg, self.arglist.attack_epsilon, torch_obs, actions, self.alg.agents[0].optimizer)
+                    # env_time += time.process_time() - timer
+                    # timer = time.process_time()
+                    actions, onehot_actions = self.select_actions(adv_obs)
+                    # step_time += time.process_time() - timer
+                    # timer = time.process_time()
+                    rewards, dones, next_obs, info = self.environment_step(actions)
+
+                    # episode_returns += rewards
+
+                    self.memory.add(adv_obs, onehot_actions, rewards, next_obs, dones)
+
+                    t += 1
+
+                    # env_time += time.process_time() - timer
+                    # timer = time.process_time()
+                    if (
+                        len(self.memory) >= self.arglist.batch_size
+                        and (t % self.arglist.steps_per_update) == 0
+                    ):
+                        losses = self.alg.update(self.memory, USE_CUDA)
+                        self.logger.log_losses(ep, losses)
+                        #self.logger.dump_losses(1)
+
+                    # update_time += time.process_time() - timer
+                    # timer = time.process_time()
+                    # for displaying learned policies
+                    if self.arglist.render:
+                        self.environment_render()
+
+                    obs = next_obs
+                    episode_length += 1
+                    done = all(dones)
+
+                    if done or episode_length == self.arglist.max_episode_len:
+                        episode_returns.append(info["episode_reward"])
+                        agent_returns = []
+                        for i in range(n_agents):
+                            agent_returns.append(info[f"agent{i}/episode_reward"])
+                        episode_agent_returns.append(agent_returns)
+
+
+                # env_time += time.process_time() - timer
+                # timer = time.process_time()
+                if  (training_returns_saved + 1) * t >= self.arglist.training_returns_freq:
+                    training_returns_saved += 1
+                    returns = np.array(episode_returns[-10:])
+                    mean_return = returns.mean()
+                    agent_returns = np.array(episode_agent_returns[-10:])
+                    mean_agent_return = agent_returns.mean(axis=0)
+
+                    self.logger.log_training_returns(t, mean_return, mean_agent_return)
+
+                if ep % self.arglist.eval_frequency == 0:
+                    eval_returns = np.zeros((self.arglist.eval_episodes, n_agents))
+                    for i in range(self.arglist.eval_episodes):
+                        ep_returns, _, _ = self.eval(ep, n_agents)
+                        eval_returns[i, :] = ep_returns
+                    self.logger.log_episode(
+                        ep, eval_returns.mean(0), eval_returns.var(0), self.alg.agents[0].epsilon
+                    )
+                    self.logger.dump_episodes(1)
+                if ep % 100 == 0 and ep > 0:
+                    duration = time.process_time() - start_time
+                    self.logger.dump_train_progress(ep, self.arglist.num_episodes, duration)
+
+                if ep % self.arglist.save_interval == 0 and ep > 0:
+                    # save models
+                    print("Remove previous models")
+                    self.model_saver.clear_models()
+                    print("Saving intermediate models")
+                    self.model_saver.save_models(self.alg, str(ep))
+                    # save logs
+                    print("Remove previous logs")
+                    self.logger.clear_logs()
+                    print("Saving intermediate logs")
+                    self.logger.save_training_returns(extension=str(ep))
+                    self.logger.save_episodes(extension=str(ep))
+                    self.logger.save_losses(extension=str(ep))
+                    # save parameter log
+                    self.logger.save_parameters(
+                        env_name,
+                        task_name,
+                        n_agents,
+                        observation_sizes,
+                        action_sizes,
+                        self.arglist,
+                    )
+
+                # after_ep_time += time.process_time() - timer
+                # timer = time.process_time()
+                # print(f"Episode {ep} times:")
+                # print(f"\tEnv time: {env_time}s")
+                # print(f"\tStep time: {step_time}s")
+                # print(f"\tUpdate time: {update_time}s")
+                # print(f"\tAfter Ep time: {after_ep_time}s")
+                # env_time = 0
+                # step_time = 0
+                # update_time = 0
+                # after_ep_time = 0
+
+            duration = time.process_time() - start_time
+            print("Overall duration: %.2fs" % duration)
+
+            # save models
+            print("Remove previous models")
+            self.model_saver.clear_models()
+            print("Saving final models")
+            self.model_saver.save_models(self.alg, "final")
+
+            # save logs
+            print("Remove previous logs")
+            self.logger.clear_logs()
+            print("Saving final logs")
+            self.logger.save_episodes(extension="final")
+            self.logger.save_losses(extension="final")
+            self.logger.save_duration_cuda(duration, torch.cuda.is_available())
+
+            # save parameter log
+            self.logger.save_parameters(
+                env_name,
+                task_name,
+                n_agents,
+                observation_sizes,
+                action_sizes,
+                self.arglist,
+            )
         elif adv == "fgsm":
             # create algorithm trainer
             self.alg = IQL(
@@ -563,8 +746,8 @@ class Train:
                     torch_obs = [
                         Variable(torch.Tensor(obs[i]), requires_grad=False) for i in range(n_agents)
                     ]
-
-                    adv_obs = fgsm(self.alg, self.arglist.attack_epsilon, torch_obs, actions, self.adv_alg.agents[0].optimizer)
+                    actions, onehot_actions = self.select_actions(torch_obs)
+                    adv_obs = fgsm(self.alg, self.arglist.attack_epsilon, torch_obs, actions, self.alg.agents[0].optimizer)
                     # env_time += time.process_time() - timer
                     # timer = time.process_time()
                     actions, onehot_actions = self.select_actions(adv_obs)
