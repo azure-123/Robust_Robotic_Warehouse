@@ -56,3 +56,27 @@ def tar_attack(model, epsilon, states, action, tar_action, opt):
     #     adv_states.data = torch.tensor(np.array(states)).data + eta_0
 
     # return adv_states.cpu().data.numpy()
+
+def fgsm(model, epsilon, states, action, opt):
+    loss_func = nn.CrossEntropyLoss()
+    adv_states = [Variable(adv_state, requires_grad=True) for adv_state in states]
+    for adv_state in adv_states:
+        adv_state.retain_grad()
+    onehot_from_logits(model.agents[0].model(adv_states[0]))
+    logits = [torch.softmax(model.agents[i].model(adv_states[i])[0], dim=0) for i in range(len(adv_states))]
+    # for logit in logits:
+    #     logit.retain_grad()
+    losses = [loss_func(logits[i], torch.tensor(action[i])) for i in range(len(adv_states))]
+    for adv_state in adv_states:
+        adv_state.retain_grad()
+    opt.zero_grad()
+    for loss in losses:
+        loss.backward(retain_graph=True)
+    eta = [epsilon * adv_states[i].grad.data.sign() for i in range(len(adv_states))]
+    for i in range(len(adv_states)):
+        adv_states[i].data = Variable(adv_states[i].data + eta[i], requires_grad=True)
+        eta[i] = torch.clamp(adv_states[i].data - states[i].data, -epsilon, epsilon)
+        adv_states[i].data = states[i].data + eta[i]
+        adv_states[i] = adv_states[i].detach()
+
+    return adv_states
