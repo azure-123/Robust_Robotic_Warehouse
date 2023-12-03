@@ -63,7 +63,7 @@ def config():
     episodes_per_eval = 8
 
     # attack config
-    adv = None #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+    adv = "adv_tar" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
     epsilon_ball = 0.02
 
 for conf in glob.glob("configs/*.yaml"):

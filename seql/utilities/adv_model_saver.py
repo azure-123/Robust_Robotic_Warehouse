@@ -3,7 +3,7 @@ import os
 import torch
 
 
-class ModelSaver:
+class AdvModelSaver:
     """
     Class to save model parameters
     """
@@ -41,3 +41,4 @@ class ModelSaver:
         model_dir = os.path.join(self.models_dir, self.run_name)
         if not os.path.isdir(model_dir):
             os.mkdir(model_dir)
+        torch.save(alg.saveables, os.path.join(model_dir, "models.pt"))
