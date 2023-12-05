@@ -7,9 +7,10 @@ from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
 
 # import attack functions
-from attack import fgsm, rand_noise, gaussian_noise, pgd
+from attack import fgsm, rand_noise, gaussian_noise, pgd, tar_attack
 
 path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
+adv_path = ""
 env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
 adv = "pgd" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
@@ -29,6 +30,15 @@ agents = [
 
 for agent in agents:
     agent.restore(path + f"/agent{agent.agent_id}")
+
+if adv == "adv_tar":
+    adv_agents = [
+    A2C(i, osp, asp, 0.1, 0.1, False, 1, 1, "cpu")
+    for i, (osp, asp) in enumerate(zip(env.observation_space, env.action_space))
+]
+
+for adv_agent in adv_agents:
+    adv_agent.restore(adv_path + f"/agent{adv_agent.agent_id}")
 
 obs = env.reset()
 
@@ -93,6 +103,22 @@ elif adv == "gaussian_noise":
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         adv_obs = gaussian_noise(epsilon, obs)
+        _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
+        actions = [a.item() for a in actions]
+        # env.render()
+        obs, _, done, info = env.step(actions)
+        if all(done):
+            obs = env.reset()
+            print("--- Episode Finished ---")
+            print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(info)
+            print(" --- ")
+elif adv == "adv_tar":
+    for i in range(RUN_STEPS):
+        obs = [torch.from_numpy(o) for o in obs]
+        _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
+        _, tar_actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
+        adv_obs = tar_attack(agents, epsilon, obs, actions, tar_actions, adv_agents[0].optimizer)
         _, actions, _ , _ = zip(*[agent.model.act(adv_obs[agent.agent_id], None, None) for agent in agents])
         actions = [a.item() for a in actions]
         # env.render()
