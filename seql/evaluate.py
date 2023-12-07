@@ -12,7 +12,7 @@ from attack import fgsm, rand_noise, gaussian_noise, pgd
 path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
 env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
-adv = "pgd" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
+adv = "fgsm" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
 epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
 niters = 10 # for pgd
 

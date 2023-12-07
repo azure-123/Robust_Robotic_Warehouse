@@ -13,8 +13,8 @@ path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_mo
 adv_path = ""
 env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
-adv = "pgd" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
-epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
+adv = "fgsm" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
+epsilon = 0.01 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
 niters = 10 # for pgd
 
 RUN_STEPS = 1500
@@ -36,9 +36,8 @@ if adv == "adv_tar":
     A2C(i, osp, asp, 0.1, 0.1, False, 1, 1, "cpu")
     for i, (osp, asp) in enumerate(zip(env.observation_space, env.action_space))
 ]
-
-for adv_agent in adv_agents:
-    adv_agent.restore(adv_path + f"/agent{adv_agent.agent_id}")
+    for adv_agent in adv_agents:
+        adv_agent.restore(adv_path + f"/agent{adv_agent.agent_id}")
 
 obs = env.reset()
 
