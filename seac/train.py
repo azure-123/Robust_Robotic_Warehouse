@@ -52,7 +52,7 @@ def config():
     )
     dummy_vecenv = False
 
-    num_env_steps = 40000000
+    num_env_steps = 80000000
 
     eval_dir = "./results/video/{id}"
     loss_dir = "./results/loss/{id}"
@@ -223,7 +223,7 @@ def main(
 
     if adv == "adv_tar":
     # calculate the actions before purturbing
-        clean_path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
+        clean_path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-2ag-v1/u3000000" #"pretrained/rware-small-4ag"
         for agent in agents:
             agent.restore(clean_path + f"/agent{agent.agent_id}")
         with torch.no_grad():
@@ -402,9 +402,9 @@ def main(
                     agent.save(save_at)
                 if j > log_interval:
                     for adv_agent in agents:
-                        save_at = path.join(cur_save_dir, f"adv_agent{agent.agent_id}")
+                        save_at = path.join(cur_save_dir, f"adv_agent{adv_agent.agent_id}")
                         os.makedirs(save_at, exist_ok=True)
-                        agent.save(save_at)
+                        adv_agent.save(save_at)
                 archive_name = shutil.make_archive(cur_save_dir, "xztar", save_dir, f"u{j}")
                 shutil.rmtree(cur_save_dir)
                 _run.add_artifact(archive_name)
