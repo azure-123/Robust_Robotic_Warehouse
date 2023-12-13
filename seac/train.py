@@ -60,11 +60,11 @@ def config():
 
     log_interval = 2000
     save_interval = int(1e6)
-    eval_interval = 800000000 # int(1e6)
+    eval_interval = 400000000 # int(1e6)
     episodes_per_eval = 8
 
     # attack config
-    adv = "adv_tar" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+    adv = "fgsm" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
     epsilon_ball = 0.02
 
 for conf in glob.glob("configs/*.yaml"):
@@ -579,6 +579,9 @@ def main(
                     _run.add_artifact(v, f"u{j}.{i}.mp4")
     elif adv == "fgsm":
         # calculate the actions before purturbing
+        clean_path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
+        for agent in agents:
+            agent.restore(clean_path + f"/agent{agent.agent_id}")
         with torch.no_grad():
             n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
                             *[
@@ -590,7 +593,7 @@ def main(
                                 for agent in agents
                             ]
                         )
-        adv_obs = fgsm(agents, epsilon_ball, obs, n_action, agents[0].optimizer)
+        adv_obs = obs
 
         for i in range(len(obs)):
             agents[i].storage.obs[0].copy_(adv_obs[i])
@@ -621,7 +624,7 @@ def main(
                 # Obser reward and next obs
                 obs, reward, done, infos = envs.step(n_action) # n_action is the perturbed action
                 with torch.no_grad():
-                    n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
+                    _, temp_action, _, _ = zip(
                         *[
                             agent.model.act(
                                 obs[agent.agent_id],

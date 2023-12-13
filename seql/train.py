@@ -270,7 +270,7 @@ class Train:
         self.action_sizes = action_sizes
 
         # attack config
-        adv = "atla" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+        adv = None #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
 
         if self.arglist.max_episode_len == 25:
             steps = self.arglist.num_episodes * 20 #self.arglist.max_episode_len
