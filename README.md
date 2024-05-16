@@ -1,4 +1,4 @@
-# Shared Experience Actor Critic
+# Robust Shared Experience Actor Critic
 
 This repository is the implementation of different robust-improving methods on [Shared Experience Actor Critic](https://arxiv.org/abs/2006.07169). 
 
