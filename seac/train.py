@@ -52,7 +52,7 @@ def config():
     )
     dummy_vecenv = False
 
-    num_env_steps = 80000000
+    num_env_steps = 40000000
 
     eval_dir = "./results/video/{id}"
     loss_dir = "./results/loss/{id}"
@@ -60,11 +60,11 @@ def config():
 
     log_interval = 2000
     save_interval = int(1e6)
-    eval_interval = 400000000 # int(1e6)
+    eval_interval = 4000000000 # int(1e6)
     episodes_per_eval = 8
 
     # attack config
-    adv = "fgsm" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
+    adv = "pgd" #"fgsm", "pgd", "rand_noise", "gaussian_noise", "atla", "adv_tar" and None
     epsilon_ball = 0.02
 
 for conf in glob.glob("configs/*.yaml"):
@@ -420,18 +420,10 @@ def main(
                     _run.add_artifact(v, f"u{j}.{i}.mp4")
     if adv == "atla":
     # calculate the actions before purturbing
-        with torch.no_grad():
-            n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
-                            *[
-                                agent.model.act(
-                                    obs[agent.agent_id],
-                                    agent.storage.recurrent_hidden_states[0],
-                                    agent.storage.masks[0],
-                                )
-                                for agent in agents
-                            ]
-                        )
-        adv_obs = atla(adv_agents, epsilon_ball, obs)
+        clean_path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1/u2000000" #"pretrained/rware-small-4ag"
+        for agent in agents:
+            agent.restore(clean_path + f"/agent{agent.agent_id}")
+        adv_obs, perturbations = atla(adv_agents, epsilon_ball, obs)
         
         for i in range(len(obs)):
             agents[i].storage.obs[0].copy_(adv_obs[i])
@@ -466,18 +458,7 @@ def main(
                     )
                 # Obser reward and next obs
                 obs, reward, done, infos = envs.step(n_action) # n_action is the perturbed action
-                with torch.no_grad():
-                    n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
-                        *[
-                            agent.model.act(
-                                obs[agent.agent_id],
-                                agent.storage.recurrent_hidden_states[step],
-                                agent.storage.masks[step],
-                            )
-                            for agent in agents
-                        ]
-                    )
-                adv_obs = atla(adv_agents, epsilon_ball, obs)
+                adv_obs, perturbations = atla(adv_agents, epsilon_ball, obs)
 
                 # envs.envs[0].render()
 
@@ -504,7 +485,7 @@ def main(
                     adv_agents.storage[i].insert(
                         obs[i],
                         # n_recurrent_hidden_states[i],
-                        adv_obs[i],
+                        perturbations[i],
                         # n_action_log_prob[i],
                         # n_value[i],
                         -reward[:, i].unsqueeze(1),
@@ -530,6 +511,7 @@ def main(
                     if writer:
                         writer.add_scalar(f"agent{agent.agent_id}/{k}", v, j)
             adv_agents.train()
+
             for agent in agents:
                 agent.storage.after_update()
             for i in range(len(agents)):
@@ -715,6 +697,9 @@ def main(
                     _run.add_artifact(v, f"u{j}.{i}.mp4")
     elif adv == "pgd":
         # calculate the actions before purturbing
+        clean_path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-2ag-v1/u3000000" #"pretrained/rware-small-4ag"
+        for agent in agents:
+            agent.restore(clean_path + f"/agent{agent.agent_id}")
         with torch.no_grad():
             n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
                             *[
@@ -726,7 +711,7 @@ def main(
                                 for agent in agents
                             ]
                         )
-        adv_obs = pgd(agents, epsilon_ball, obs, n_action, agents[0].optimizer)
+        adv_obs = obs
 
         for i in range(len(obs)):
             agents[i].storage.obs[0].copy_(adv_obs[i])
@@ -757,7 +742,7 @@ def main(
                 # Obser reward and next obs
                 obs, reward, done, infos = envs.step(n_action) # n_action is the perturbed action
                 with torch.no_grad():
-                    n_value, n_action, n_action_log_prob, n_recurrent_hidden_states = zip(
+                    _, temp_action, _, _ = zip(
                         *[
                             agent.model.act(
                                 obs[agent.agent_id],
@@ -767,7 +752,7 @@ def main(
                             for agent in agents
                         ]
                     )
-                adv_obs = pgd(agents, epsilon_ball, obs, n_action, agents[0].optimizer)
+                adv_obs = pgd(agents, epsilon_ball, obs, n_action, agents[0].optimizer, 5)
 
                 # envs.envs[0].render()
 

@@ -5,19 +5,20 @@ import gym
 
 from a2c import A2C
 from wrappers import RecordEpisodeStatistics, TimeLimit
+import numpy as np
 
 # import attack functions
 from attack import fgsm, rand_noise, gaussian_noise, pgd, tar_attack
 
-path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-2ag-v1/u3000000" #"pretrained/rware-small-4ag"
+path = "/home/gwr/python_projects/Robust_Robotic_Warehouse/seac/results/unzip_models/rware-tiny-4ag-v1_pgd_0-02/u1000000" #"pretrained/rware-small-4ag"
 adv_path = ""
-env_name = "rware-tiny-2ag-v1"
+env_name = "rware-tiny-4ag-v1"
 time_limit = 500 # 25 for LBF
 adv = "fgsm" # "fgsm", "pgd", "rand_noise", "gaussian_noise" and None
-epsilon = 0.02 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
+epsilon = 0.04 # <=0.02 is the appropriate perturbation size for fgsm and pgd, random noise and gaussian noise require larger perturbations
 niters = 10 # for pgd
 
-RUN_STEPS = 1500
+RUN_STEPS = time_limit * 20
 
 env = gym.make(env_name)
 env = TimeLimit(env, time_limit)
@@ -42,6 +43,7 @@ if adv == "adv_tar":
 obs = env.reset()
 
 if not adv:
+    reward_list = []
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
@@ -52,9 +54,13 @@ if not adv:
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            reward_list.append(sum(info['episode_reward']))
             print(info)
             print(" --- ")
+    print(f"Reward mean: {np.mean(np.array(reward_list))}")
+    print(f"Reward std: {np.std(np.array(reward_list))}")
 elif adv == "fgsm":
+    reward_list = []
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         _, actions, _ , _ = zip(*[agent.model.act(obs[agent.agent_id], None, None) for agent in agents])
@@ -67,8 +73,11 @@ elif adv == "fgsm":
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            reward_list.append(sum(info['episode_reward']))
             print(info)
             print(" --- ")
+    print(f"Reward mean: {np.mean(np.array(reward_list))}")
+    print(f"Reward std: {np.std(np.array(reward_list))}")
 elif adv == "pgd":
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
@@ -82,9 +91,11 @@ elif adv == "pgd":
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(f"Reward std: {np.std(np.array(info['episode_reward']))}")
             print(info)
             print(" --- ")
 elif adv == "rand_noise":
+    reward_list = []
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         adv_obs = rand_noise(epsilon, obs)
@@ -96,9 +107,13 @@ elif adv == "rand_noise":
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            reward_list.append(sum(info['episode_reward']))
             print(info)
             print(" --- ")
+    print(f"Reward mean: {np.mean(np.array(reward_list))}")
+    print(f"Reward std: {np.std(np.array(reward_list))}")
 elif adv == "gaussian_noise":
+    reward_list = []
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
         adv_obs = gaussian_noise(epsilon, obs)
@@ -110,8 +125,11 @@ elif adv == "gaussian_noise":
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            reward_list.append(sum(info['episode_reward']))
             print(info)
             print(" --- ")
+    print(f"Reward mean: {np.mean(np.array(reward_list))}")
+    print(f"Reward std: {np.std(np.array(reward_list))}")
 elif adv == "adv_tar":
     for i in range(RUN_STEPS):
         obs = [torch.from_numpy(o) for o in obs]
@@ -126,6 +144,7 @@ elif adv == "adv_tar":
             obs = env.reset()
             print("--- Episode Finished ---")
             print(f"Episode rewards: {sum(info['episode_reward'])}")
+            print(f"Reward std: {np.std(np.array(info['episode_reward']))}")
             print(info)
             print(" --- ")
 else:
